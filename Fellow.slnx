@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Fellow.Services/Fellow.Services.csproj" />
+    <Project Path="src/Fellow.Web.UI/Fellow.Web.UI.csproj" />
+  </Folder>
+</Solution>

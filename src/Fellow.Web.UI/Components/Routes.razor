@@ -1,0 +1,21 @@
+﻿<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+                    <h1 style="font-size: 2rem; margin-bottom: 1rem;">Please Log In</h1>
+                    <p style="margin-bottom: 1rem;">You need to be logged in to access this application.</p>
+                    <a href="login" style="background-color: #24292e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        Login with GitHub
+                    </a>
+                </div>
+            </NotAuthorized>
+            <Authorizing>
+                <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+                    <p>Authorizing...</p>
+                </div>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>
