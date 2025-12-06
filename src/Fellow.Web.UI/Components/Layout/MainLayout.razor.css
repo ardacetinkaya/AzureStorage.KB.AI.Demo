@@ -1,3 +1,105 @@
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f6f8fa;
+}
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background: #0d1117;
+    color: #f0f6fc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.app-logo {
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    transition: background 0.2s ease;
+}
+
+.user-summary:hover {
+    background: rgba(240, 246, 252, 0.08);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.user-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.user-handle {
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+
+.auth-link {
+    text-decoration: none;
+    font-weight: 600;
+    color: #f0f6fc;
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
+    border: 1px solid rgba(240, 246, 252, 0.2);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.auth-link.logout:hover {
+    background: #f85149;
+    border-color: #f85149;
+    color: #0d1117;
+}
+
+.auth-link.login {
+    background: #238636;
+    border-color: #238636;
+}
+
+.auth-link.login:hover {
+    background: #2ea043;
+    border-color: #2ea043;
+}
+
+.app-main {
+    flex: 1;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
@@ -12,9 +114,9 @@
     z-index: 1000;
 }
 
-    #blazor-error-ui .dismiss {
-        cursor: pointer;
-        position: absolute;
-        right: 0.75rem;
-        top: 0.5rem;
-    }
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}

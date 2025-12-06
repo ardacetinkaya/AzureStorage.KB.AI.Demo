@@ -15,14 +15,14 @@ builder.Services.AddAuthentication(options =>
     .AddCookie()
     .AddGitHub(options =>
     {
-        options.ClientId = builder.Configuration["GitHub:ClientId"] ?? throw new InvalidOperationException("GitHub:ClientId is missing");
-        options.ClientSecret = builder.Configuration["GitHub:ClientSecret"] ?? throw new InvalidOperationException("GitHub:ClientSecret is missing");
+        options.ClientId = builder.Configuration["Fellow:Authentication:GitHub:ClientId"] ?? throw new InvalidOperationException("Authentication:GitHub:ClientId is missing");
+        options.ClientSecret = builder.Configuration["Fellow:Authentication:GitHub:ClientSecret"] ?? throw new InvalidOperationException("Authentication:GitHub:ClientSecret is missing");
     });
 
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
-builder.Services.AddFellowAIServices(builder.Configuration, builder.Environment);
+builder.Services.AddFellowAiServices(builder.Configuration, builder.Environment);
 
 // Configure Forwarded Headers for Codespaces/Proxies
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

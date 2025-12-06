@@ -1,49 +1,84 @@
 ﻿@page "/"
+@attribute [AllowAnonymous]
 @using System.ComponentModel
 @using Fellow.Services.MCP
 @inject IChatClient ChatClient
 @inject NavigationManager Nav
-@inject SemanticSearch Search
 @inject KnowledgeBaseTools Tools
+@inject KnowledgeSourceTools KBTools
 @implements IDisposable
 
 <PageTitle>Chat</PageTitle>
 
-<ChatHeader OnNewChat="@ResetConversationAsync" />
+<AuthorizeView>
+    <Authorized>
+        <div class="chat-page">
+            <ChatHeader OnNewChat="@ResetConversationAsync" />
 
-<ChatMessageList Messages="@messages" InProgressMessage="@currentResponseMessage">
-    <NoMessagesContent>
-        <div>To get started, try asking about these example documents. You can replace these with your own data and replace this message.</div>
-        <ChatCitation File="Example_Emergency_Survival_Kit.pdf"/>
-        <ChatCitation File="Example_GPS_Watch.md"/>
-    </NoMessagesContent>
-</ChatMessageList>
+            <div class="chat-content">
+                <ChatMessageList Messages="@messages" InProgressMessage="@currentResponseMessage">
+                    <NoMessagesContent>
+                        <div>To get started, try asking about these example documents. You can replace these with your own data and replace this message.</div>
+                        <ChatCitation File="Example_Emergency_Survival_Kit.pdf" />
+                        <ChatCitation File="Example_GPS_Watch.md" />
+                    </NoMessagesContent>
+                </ChatMessageList>
+            </div>
 
-<div class="chat-container">
-    <ChatSuggestions OnSelected="@AddUserMessageAsync" @ref="@chatSuggestions" />
-    <ChatInput OnSend="@AddUserMessageAsync" @ref="@chatInput" />
-    <SurveyPrompt /> @* Remove this line to eliminate the template survey message *@
-</div>
+            <div class="chat-container">
+                <ChatSuggestions OnSelected="@AddUserMessageAsync" @ref="@chatSuggestions" />
+                <ChatInput OnSend="@AddUserMessageAsync" @ref="@chatInput" />
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="login-panel">
+            <div class="login-card">
+                <h1>Welcome to Fellow</h1>
+                <p>Connect your GitHub account to start chatting with your fellow.</p>
+                <a class="github-button" href="login">Sign in with GitHub</a>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
+//     private const string SystemPrompt = @"
+//         You are an assistant who answers questions about information you retrieve.
+//         Do not answer questions about anything else.
+//         Use only simple markdown to format your responses.
+//
+//         Use the LoadDocuments tool to prepare for searches before answering any questions.
+//
+//         Use the Search tool to find relevant information. When you do this, end your
+//         reply with citations in the special XML format:
+//
+//         <citation filename='string'>exact quote here</citation>
+//
+//         Always include the citation in your response if there are results.
+//
+//         The quote must be max 5 words, taken word-for-word from the search result, and is the basis for why the citation is relevant.
+//         Don't refer to the presence of citations; just emit these tags right at the end, with no surrounding text.
+//         ";
     private const string SystemPrompt = @"
-        You are an assistant who answers questions about information you retrieve.
-        Do not answer questions about anything else.
-        Use only simple markdown to format your responses.
+        You are an assistant who answers questions about information you have in your knowledge base.
+        If you don't know the answer, just say that you don't know. Do not try to make up.
 
-        Use the LoadDocuments tool to prepare for searches before answering any questions.
+        Use the InitAsync tool to prepare for searches before answering any questions.
+        Use the GetKnowledgeSourceAsync tool to get info about knowledge source.
+        Use the GetKnowledgeSourceStatusAsync tool to check the status of the knowledge source.
 
         Use the Search tool to find relevant information. When you do this, end your
-        reply with citations in the special XML format:
+        reply with citations in the special XML format: 
 
-        <citation filename='string'>exact quote here</citation>
+        <citation>exact quote here</citation>
 
-        Always include the citation in your response if there are results.
-
-        The quote must be max 5 words, taken word-for-word from the search result, and is the basis for why the citation is relevant.
-        Don't refer to the presence of citations; just emit these tags right at the end, with no surrounding text.
+        Use only simple markdown to format your responses.
+        
+        Other than answering other questions, just politly refuse to answer questions that are not exists in your knowledge base.
         ";
-
+    
+    
     private int statefulMessageCount;
     private readonly ChatOptions chatOptions = new();
     private readonly List<ChatMessage> messages = new();
@@ -57,8 +92,10 @@
         statefulMessageCount = 0;
         messages.Add(new(ChatRole.System, SystemPrompt));
         chatOptions.Tools = [
-            AIFunctionFactory.Create(Tools.LoadDocumentsAsync),
-            AIFunctionFactory.Create(Tools.SearchAsync)
+            AIFunctionFactory.Create(Tools.InitAsync),
+            AIFunctionFactory.Create(Tools.SearchAsync),
+            AIFunctionFactory.Create(KBTools.GetKnowledgeSourceAsync),
+            AIFunctionFactory.Create(KBTools.GetKnowledgeSourceStatusAsync)
         ];
     }
 
@@ -74,20 +111,35 @@
         // Stream and display a new response from the IChatClient
         var responseText = new TextContent("");
         currentResponseMessage = new ChatMessage(ChatRole.Assistant, [responseText]);
-        currentResponseCancellation = new();
-        await foreach (var update in ChatClient.GetStreamingResponseAsync(messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
+        currentResponseCancellation = new CancellationTokenSource();
+        bool isError = false;
+        try
         {
-            messages.AddMessages(update, filter: c => c is not TextContent);
-            responseText.Text += update.Text;
-            chatOptions.ConversationId = update.ConversationId;
+            await foreach (var update in ChatClient.GetStreamingResponseAsync(messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
+            {
+                messages.AddMessages(update, filter: c => c is not TextContent);
+                responseText.Text += update.Text;
+                chatOptions.ConversationId = update.ConversationId;
+                ChatMessageItem.NotifyChanged(currentResponseMessage);
+            }
+        }
+        catch (Exception e)
+        {
+            isError = true;
+            responseText.Text += $"\n\n**Error:** {e.Message}";
             ChatMessageItem.NotifyChanged(currentResponseMessage);
         }
+        finally
+        {
+            // Store the final response in the conversation, and begin getting suggestions
+            messages.Add(currentResponseMessage!);
+            statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
+            currentResponseMessage = null;
+            chatSuggestions?.Update(messages); 
+        }
 
-        // Store the final response in the conversation, and begin getting suggestions
-        messages.Add(currentResponseMessage!);
-        statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
-        currentResponseMessage = null;
-        chatSuggestions?.Update(messages);
+
+
     }
 
     private void CancelAnyCurrentResponse()

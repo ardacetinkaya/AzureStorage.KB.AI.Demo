@@ -54,12 +54,14 @@
                 suggestions = null;
             }
 
-            StateHasChanged();
+  
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await DispatchExceptionAsync(ex);
+           suggestions = ["Error generating suggestions."];
         }
+        
+        StateHasChanged();
     }
 
     private async Task AddSuggestionAsync(string text)

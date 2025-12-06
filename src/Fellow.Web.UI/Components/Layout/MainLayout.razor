@@ -1,9 +1,87 @@
 ﻿@inherits LayoutComponentBase
+@using System.Security.Claims
+@inject NavigationManager Navigation
 
-@Body
+<div class="app-shell">
+    <header class="app-header">
+        <div class="header-left">
+            <span class="app-logo">Fellow</span>
+        </div>
+        <div class="header-right">
+            <AuthorizeView>
+                <Authorized Context="authState">
+                    @{
+                        var user = authState.User;
+                        var displayName = GetDisplayName(user);
+                        var login = GetLogin(user);
+                        var avatarUrl = GetAvatarUrl(user);
+                    }
+                    <div class="user-summary" title="@displayName">
+                        @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                        {
+                            <img src="@avatarUrl" alt="@displayName" class="user-avatar" />
+                        }
+                        <div class="user-text">
+                            <span class="user-name">@displayName</span>
+                            @if (!string.IsNullOrWhiteSpace(login))
+                            {
+                                <span class="user-handle">@("@" + login)</span>
+                            }
+                        </div>
+                    </div>
+                    <button type="button" class="auth-link logout" @onclick="SignOut">Sign out</button>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="auth-link login" href="login">Login with GitHub</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </header>
+    <main class="app-main">
+        @Body
+    </main>
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private static string GetDisplayName(ClaimsPrincipal user)
+    {
+        return GetClaim(user, "urn:github:name", ClaimTypes.Name, "name")
+               ?? GetLogin(user)
+               ?? "GitHub User";
+    }
+
+    private static string? GetLogin(ClaimsPrincipal user)
+    {
+        return GetClaim(user, "urn:github:login", ClaimTypes.NameIdentifier, "login");
+    }
+
+    private static string? GetAvatarUrl(ClaimsPrincipal user)
+    {
+        return GetClaim(user, "urn:github:avatar_url", "avatar_url");
+    }
+
+    private void SignOut()
+    {
+        Navigation.NavigateTo("logout", forceLoad: true);
+    }
+
+    private static string? GetClaim(ClaimsPrincipal user, params string[] claimTypes)
+    {
+        foreach (var claimType in claimTypes)
+        {
+            var value = user.FindFirst(claimType)?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+}
