@@ -9,7 +9,7 @@ public class KnowledgeBaseTools(IBrain knowledgeBase)
     [Description("Initialize the knowledge base for performing searches. Must be done before a search can be executed, but only needs to be done once.")]
     public async Task InitAsync()
     {
-        await knowledgeBase.InitializeAsync("fellow-brain");
+        await knowledgeBase.InitializeAsync();
     }
     [Description("Searches for information using a phrase or keyword. Relies on documents already being loaded.")]
     public async Task<IEnumerable<string>> SearchAsync(
@@ -18,10 +18,7 @@ public class KnowledgeBaseTools(IBrain knowledgeBase)
     {
         var results = await knowledgeBase.SearchAsync(searchPhrase);
         
-        if(results is null) return Array.Empty<string>();
-        
-        return results.SemanticSearch.Answers.Select(result =>
-            $"<result>{result.Text}</result>");
+        return results.Select(result=> $"{result}");
     }
     
 }

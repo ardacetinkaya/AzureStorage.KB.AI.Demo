@@ -2,6 +2,7 @@ using Azure;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
+using Azure.Search.Documents.KnowledgeBases;
 using Azure.Search.Documents.KnowledgeBases.Models;
 using Azure.Search.Documents.Models;
 using Microsoft.Extensions.Configuration;
@@ -11,6 +12,8 @@ namespace Fellow.Services.Knowledge;
 
 public class Brain(IOptions<Configurations> configuration, IKnowledgeSource knowledgeSource) : IBrain
 {
+    private const string Name = "fellow-brain";
+    
     private readonly string _searchEndpoint = configuration.Value.KnowledgeSource?.AzureSearch.Endpoint ??
                                               throw new InvalidOperationException(
                                                   "Azure Search endpoint is not configured.");
@@ -27,16 +30,38 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
                                throw new InvalidOperationException("Azure Search API key is not configured."))
     );
 
-
-    public async Task<SearchResults<string>> SearchAsync(string query)
+    private readonly List<Dictionary<string, string>> _messages = [];
+    
+    public async Task<List<string>> SearchAsync(string query)
     {
-        var searchClient = new SearchClient(new Uri(_searchEndpoint)
-            , IndexName
-            , new AzureKeyCredential(_apiKey));
+        var baseClient = new KnowledgeBaseRetrievalClient(
+            endpoint: new Uri(configuration.Value.KnowledgeSource.AzureSearch.Endpoint),
+            knowledgeBaseName: Name,
+            credential: new AzureKeyCredential(configuration.Value.KnowledgeSource.AzureSearch.ApiKey) 
+        );
 
-        var result = await searchClient.SearchAsync<string>(query);
+        this._messages.Add(new Dictionary<string, string>
+        {
+            { "role", "user" },
+            { "content", query }
+        });
+        
+        var retrievalRequest = new KnowledgeBaseRetrievalRequest();
+        foreach (var message in _messages.Where(message => message["role"] != "system"))
+        {
+            retrievalRequest.Messages.Add(new KnowledgeBaseMessage(content: new[] { new KnowledgeBaseMessageTextContent(message["content"]) }) { Role = message["role"] });
+        }
+        retrievalRequest.RetrievalReasoningEffort = new KnowledgeRetrievalLowReasoningEffort();
+        var retrivalResponse = await baseClient.RetrieveAsync(retrievalRequest);
+        var retrivalResponseText =
+            (retrivalResponse.Value.Response[0].Content[0] as KnowledgeBaseMessageTextContent)!.Text;
+        _messages.Add(new Dictionary<string, string>
+        {
+            { "role", "assistant" },
+            { "content", retrivalResponseText }
+        });
 
-        return result;
+        return [retrivalResponseText];
     }
 
     private async Task<bool> IsExistingKnowledgeBase(string knowledgeBaseName)
@@ -54,9 +79,9 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
         return false;
     }
 
-    public async Task InitializeAsync(string name)
+    public async Task InitializeAsync()
     {
-        var exists = await IsExistingKnowledgeBase(name);
+        var exists = await IsExistingKnowledgeBase(Name);
         if (!exists)
         {
             var model = new KnowledgeBaseAzureOpenAIModel(new AzureOpenAIVectorizerParameters
@@ -69,20 +94,19 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
 
             var knowledgeSourceName = "fellow-blob-knowledge-source";
             var isExists = await knowledgeSource.IsExistingKnowledgeSource(knowledgeSourceName);
-            if (isExists is false)
+            if (!isExists)
             {
                 await knowledgeSource.Create(knowledgeSourceName);
             }
 
             var sources = new KnowledgeSourceReference[] { new(knowledgeSourceName) };
-            var knowledgeBase = new KnowledgeBase(name, sources)
+            var knowledgeBase = new KnowledgeBase(Name, sources)
             {
                 RetrievalReasoningEffort = new KnowledgeRetrievalLowReasoningEffort(),
-                RetrievalInstructions = @"Provide an informative answer based on the retrieved documents from knowledge source. 
-Answer concisely but in short complete max 2 sentences.
-                ",
-                OutputMode = KnowledgeRetrievalOutputMode.ExtractiveData,
-                Models = { model }
+                RetrievalInstructions = @"Retrieve relevant exact data to answer the question",
+                OutputMode = "answerSynthesis",
+                Models = { model },
+                AnswerInstructions = "Give answers as markdown."
             };
 
             await _searchIndexClient.CreateOrUpdateKnowledgeBaseAsync(knowledgeBase);

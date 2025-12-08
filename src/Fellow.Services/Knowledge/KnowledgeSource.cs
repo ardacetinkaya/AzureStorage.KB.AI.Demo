@@ -1,6 +1,7 @@
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
 using Azure;
+using Azure.Search.Documents.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 

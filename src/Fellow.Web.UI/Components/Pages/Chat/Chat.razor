@@ -1,6 +1,7 @@
 ﻿@page "/"
 @attribute [AllowAnonymous]
 @using System.ComponentModel
+@using System.Text.Json
 @using Fellow.Services.MCP
 @inject IChatClient ChatClient
 @inject NavigationManager Nav
@@ -115,13 +116,39 @@
         bool isError = false;
         try
         {
-            await foreach (var update in ChatClient.GetStreamingResponseAsync(messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))
-            {
-                messages.AddMessages(update, filter: c => c is not TextContent);
-                responseText.Text += update.Text;
-                chatOptions.ConversationId = update.ConversationId;
-                ChatMessageItem.NotifyChanged(currentResponseMessage);
-            }
+            await foreach (var update in ChatClient.GetStreamingResponseAsync(messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))  
+            {  
+                // Check for function calls  
+                var functionCalls = update.Contents.OfType<FunctionCallContent>().ToList();  
+      
+                if (functionCalls.Any())  
+                {  
+
+                    var searchFunctionCall = functionCalls.FirstOrDefault(fc => fc.Name.Contains("Search"));
+                    if (searchFunctionCall is not null)
+                    {
+                        var result = await Tools.SearchAsync(string.Join(" ", searchFunctionCall.Arguments));  
+
+                        messages.Add(new ChatMessage(ChatRole.Assistant, [searchFunctionCall]));
+                        messages.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(searchFunctionCall.CallId, result)]));
+
+                        responseText.Text = string.Join(" ", result);
+                        ChatMessageItem.NotifyChanged(currentResponseMessage);
+
+                        break;
+                    }
+                }  
+      
+                // Normal streaming behavior for all other content  
+                messages.AddMessages(update, filter: c => c is not TextContent);  
+                responseText.Text += update.Text;  
+                chatOptions.ConversationId = update.ConversationId;  
+                ChatMessageItem.NotifyChanged(currentResponseMessage);  
+            }  
+
+            Found:  
+            int a=0;  
+  
         }
         catch (Exception e)
         {
