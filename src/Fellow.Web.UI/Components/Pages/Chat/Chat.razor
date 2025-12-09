@@ -113,7 +113,7 @@
         var responseText = new TextContent("");
         currentResponseMessage = new ChatMessage(ChatRole.Assistant, [responseText]);
         currentResponseCancellation = new CancellationTokenSource();
-        bool isError = false;
+        var isError = false;
         try
         {
             await foreach (var update in ChatClient.GetStreamingResponseAsync(messages.Skip(statefulMessageCount), chatOptions, currentResponseCancellation.Token))  
@@ -123,9 +123,8 @@
       
                 if (functionCalls.Any())  
                 {  
-
                     var searchFunctionCall = functionCalls.FirstOrDefault(fc => fc.Name.Contains("Search"));
-                    if (searchFunctionCall is not null)
+                    if (searchFunctionCall is not null && searchFunctionCall.Arguments is not null)
                     {
                         var result = await Tools.SearchAsync(string.Join(" ", searchFunctionCall.Arguments));  
 
@@ -144,11 +143,7 @@
                 responseText.Text += update.Text;  
                 chatOptions.ConversationId = update.ConversationId;  
                 ChatMessageItem.NotifyChanged(currentResponseMessage);  
-            }  
-
-            Found:  
-            int a=0;  
-  
+            }
         }
         catch (Exception e)
         {
@@ -158,11 +153,15 @@
         }
         finally
         {
-            // Store the final response in the conversation, and begin getting suggestions
-            messages.Add(currentResponseMessage!);
-            statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
-            currentResponseMessage = null;
-            chatSuggestions?.Update(messages); 
+            if (isError is not true)
+            {
+                // Store the final response in the conversation, and begin getting suggestions
+                messages.Add(currentResponseMessage!);
+                statefulMessageCount = chatOptions.ConversationId is not null ? messages.Count : 0;
+                currentResponseMessage = null;
+                chatSuggestions?.Update(messages); 
+            }
+
         }
 
 
