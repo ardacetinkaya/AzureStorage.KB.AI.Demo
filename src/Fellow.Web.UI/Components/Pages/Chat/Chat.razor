@@ -1,12 +1,10 @@
 ﻿@page "/"
 @attribute [AllowAnonymous]
-@using System.ComponentModel
-@using System.Text.Json
 @using Fellow.Services.MCP
 @inject IChatClient ChatClient
 @inject NavigationManager Nav
 @inject KnowledgeBaseTools Tools
-@inject KnowledgeSourceTools KBTools
+@inject KnowledgeSourceTools KbTools
 @implements IDisposable
 
 <PageTitle>Chat</PageTitle>
@@ -19,8 +17,7 @@
             <div class="chat-content">
                 <ChatMessageList Messages="@messages" InProgressMessage="@currentResponseMessage">
                     <NoMessagesContent>
-                        <div>To get started, try asking about these example documents. You can replace these with your own data and replace this message.</div>
-                        <ChatCitation File="Example_Emergency_Survival_Kit.pdf" />
+                        <div>To get started, try asking about these example already uploaded documents. You can upload additional documents to Azure Storage blob container.</div>
                         <ChatCitation File="Example_GPS_Watch.md" />
                     </NoMessagesContent>
                 </ChatMessageList>
@@ -95,8 +92,8 @@
         chatOptions.Tools = [
             AIFunctionFactory.Create(Tools.InitAsync),
             AIFunctionFactory.Create(Tools.SearchAsync),
-            AIFunctionFactory.Create(KBTools.GetKnowledgeSourceAsync),
-            AIFunctionFactory.Create(KBTools.GetKnowledgeSourceStatusAsync)
+            AIFunctionFactory.Create(KbTools.GetKnowledgeSourceAsync),
+            AIFunctionFactory.Create(KbTools.GetKnowledgeSourceStatusAsync)
         ];
     }
 
@@ -120,24 +117,30 @@
             {  
                 // Check for function calls  
                 var functionCalls = update.Contents.OfType<FunctionCallContent>().ToList();  
-      
+    
                 if (functionCalls.Any())  
                 {  
                     var searchFunctionCall = functionCalls.FirstOrDefault(fc => fc.Name.Contains("Search"));
-                    if (searchFunctionCall is not null && searchFunctionCall.Arguments is not null)
+                    if (searchFunctionCall is not null)
                     {
-                        var result = await Tools.SearchAsync(string.Join(" ", searchFunctionCall.Arguments));  
-
+                        // Add function call IMMEDIATELY to show "Searching..." indicator
                         messages.Add(new ChatMessage(ChatRole.Assistant, [searchFunctionCall]));
+                        ChatMessageItem.NotifyChanged(currentResponseMessage);
+                        StateHasChanged(); // Force Blazor to re-render
+            
+                        // Now execute the tool (this takes time)
+                        var result = await Tools.SearchAsync(string.Join(" ",searchFunctionCall.Arguments?.Values ?? []).Trim());  
+            
+                        // Add the result
                         messages.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(searchFunctionCall.CallId, result)]));
-
+            
                         responseText.Text = string.Join(" ", result);
                         ChatMessageItem.NotifyChanged(currentResponseMessage);
-
+                        StateHasChanged(); // Force Blazor to re-render
                         break;
                     }
                 }  
-      
+    
                 // Normal streaming behavior for all other content  
                 messages.AddMessages(update, filter: c => c is not TextContent);  
                 responseText.Text += update.Text;  
@@ -150,6 +153,7 @@
             isError = true;
             responseText.Text += $"\n\n**Error:** {e.Message}";
             ChatMessageItem.NotifyChanged(currentResponseMessage);
+            StateHasChanged(); // Force Blazor to re-render
         }
         finally
         {
@@ -161,7 +165,7 @@
                 currentResponseMessage = null;
                 chatSuggestions?.Update(messages); 
             }
-
+            
         }
 
 
