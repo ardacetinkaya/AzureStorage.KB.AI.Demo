@@ -4,8 +4,6 @@ using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
 using Azure.Search.Documents.KnowledgeBases;
 using Azure.Search.Documents.KnowledgeBases.Models;
-using Azure.Search.Documents.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Fellow.Services.Knowledge;
@@ -13,21 +11,10 @@ namespace Fellow.Services.Knowledge;
 public class Brain(IOptions<Configurations> configuration, IKnowledgeSource knowledgeSource) : IBrain
 {
     private const string Name = "fellow-brain";
-    
-    private readonly string _searchEndpoint = configuration.Value.KnowledgeSource?.AzureSearch.Endpoint ??
-                                              throw new InvalidOperationException(
-                                                  "Azure Search endpoint is not configured.");
-
-    private readonly string _apiKey = configuration.Value.KnowledgeSource.AzureSearch.ApiKey ??
-                                      throw new InvalidOperationException("Azure Search API key is not configured.");
-
-    private const string IndexName = "fellow-blob-knowledge-source-index";
 
     private readonly SearchIndexClient _searchIndexClient = new(
-        new Uri(configuration.Value.KnowledgeSource.AzureSearch.Endpoint ??
-                throw new InvalidOperationException("Azure Search endpoint is not configured.")),
-        new AzureKeyCredential(configuration.Value.KnowledgeSource.AzureSearch.ApiKey ??
-                               throw new InvalidOperationException("Azure Search API key is not configured."))
+        new Uri(configuration.Value.KnowledgeSource.AzureSearch.Endpoint ?? throw new InvalidOperationException("Azure Search endpoint is not configured.")),
+        new AzureKeyCredential(configuration.Value.KnowledgeSource.AzureSearch.ApiKey ?? throw new InvalidOperationException("Azure Search API key is not configured."))
     );
 
     private readonly List<Dictionary<string, string>> _messages = [];
@@ -43,12 +30,12 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
         query = SanitizeQuery(query);
         
         var baseClient = new KnowledgeBaseRetrievalClient(
-            endpoint: new Uri(configuration.Value.KnowledgeSource.AzureSearch.Endpoint),
+            endpoint: new Uri(configuration.Value.KnowledgeSource!.AzureSearch.Endpoint),
             knowledgeBaseName: Name,
             credential: new AzureKeyCredential(configuration.Value.KnowledgeSource.AzureSearch.ApiKey) 
         );
 
-        this._messages.Add(new Dictionary<string, string>
+        _messages.Add(new Dictionary<string, string>
         {
             { "role", "user" },
             { "content", query }
@@ -57,15 +44,22 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
         var retrievalRequest = new KnowledgeBaseRetrievalRequest();
         foreach (var message in _messages.Where(message => message["role"] != "system"))
         {
-            retrievalRequest.Messages.Add(new KnowledgeBaseMessage(content: new[] { new KnowledgeBaseMessageTextContent(message["content"]) }) { Role = message["role"] });
+            retrievalRequest.Messages.Add(
+                new KnowledgeBaseMessage(content: [
+                    new KnowledgeBaseMessageTextContent(message["content"]) 
+                ])
+                {
+                    Role = message["role"]
+                }
+            );
         }
         retrievalRequest.RetrievalReasoningEffort = new KnowledgeRetrievalLowReasoningEffort();
 
         try
         {
             var retrivalResponse = await baseClient.RetrieveAsync(retrievalRequest).ConfigureAwait(false);
-            var retrivalResponseText =
-                (retrivalResponse.Value.Response[0].Content[0] as KnowledgeBaseMessageTextContent)!.Text;
+            var retrivalResponseText = (retrivalResponse.Value.Response[0].Content[0] as KnowledgeBaseMessageTextContent)!.Text;
+            
             _messages.Add(new Dictionary<string, string>
             {
                 { "role", "assistant" },
