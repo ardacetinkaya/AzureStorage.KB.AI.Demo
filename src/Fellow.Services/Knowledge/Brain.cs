@@ -13,7 +13,7 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
     private const string Name = "fellow-brain";
 
     private readonly SearchIndexClient _searchIndexClient = new(
-        new Uri(configuration.Value.KnowledgeSource.AzureSearch.Endpoint ?? throw new InvalidOperationException("Azure Search endpoint is not configured.")),
+        new Uri(configuration.Value.KnowledgeSource?.AzureSearch.Endpoint ?? throw new InvalidOperationException("Azure Search endpoint is not configured.")),
         new AzureKeyCredential(configuration.Value.KnowledgeSource.AzureSearch.ApiKey ?? throw new InvalidOperationException("Azure Search API key is not configured."))
     );
 
@@ -57,16 +57,16 @@ public class Brain(IOptions<Configurations> configuration, IKnowledgeSource know
 
         try
         {
-            var retrivalResponse = await baseClient.RetrieveAsync(retrievalRequest).ConfigureAwait(false);
-            var retrivalResponseText = (retrivalResponse.Value.Response[0].Content[0] as KnowledgeBaseMessageTextContent)!.Text;
+            var retrievalResponse = await baseClient.RetrieveAsync(retrievalRequest).ConfigureAwait(false);
+            var retrievalResponseText = (retrievalResponse.Value.Response[0].Content[0] as KnowledgeBaseMessageTextContent)!.Text;
             
             _messages.Add(new Dictionary<string, string>
             {
                 { "role", "assistant" },
-                { "content", retrivalResponseText }
+                { "content", retrievalResponseText }
             });
 
-            return [retrivalResponseText];
+            return [retrievalResponseText];
         }
         catch (Exception e)
         {
